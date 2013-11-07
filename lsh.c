@@ -47,33 +47,51 @@
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
-void runProgram(Pgm *program, int fdRead, int fdWrite ) {
-  int fd[2] = {fdRead,fdWrite};
-  if(program->next) {
-    int result = pipe(fd);
-    if(result < 0) {
-      printf("PIPE ERROR\n");
-      return;
-    }
+void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite);
 
-    pid_t pid = fork();
-    if(pid == 0) {  
-      runProgram(program->next, fdRead, fd[PIPE_WRITE]);
-    } else {
-      dup2(fdWrite, fd[PIPE_WRITE]);
-      waitpid(pid, NULL, 0);
-    }
-  } else {
-    dup2(fdRead, fd[PIPE_READ]);
-    dup2(fdWrite, fd[PIPE_WRITE]);
-  }
-  dup2(fd[PIPE_READ], STDIN_FILENO);
-  dup2(fd[PIPE_WRITE], STDOUT_FILENO);
+void runProgram(const Pgm *program) {
   int result = execvp(program->pgmlist[0], program->pgmlist);
   if(result < 0) {
     perror(NULL);
     exit(-1);
   }
+}
+
+int hasAnotherCommand(const Pgm *program) {
+  return program->next != NULL;
+}
+
+void setupStdInAndOut(int read, int write) {
+  dup2(read, STDIN_FILENO);
+  dup2(write, STDOUT_FILENO);
+}
+
+void fixPipe(const Pgm *program, int fdRead, int fdWrite, int fd[2]) {
+  int result = pipe(fd);
+  if(result < 0) {
+    printf("PIPE ERROR\n");
+    return;
+  }
+
+  pid_t pid = fork();
+  if(pid == 0) {  
+    setupCommandsAndExecute(program->next, fdRead, fd[PIPE_WRITE]);
+  } else {
+    dup2(fdWrite, fd[PIPE_WRITE]);
+    waitpid(pid, NULL, 0);
+  }
+}
+
+void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite ) {
+  int fd[2] = {fdRead,fdWrite};
+  if(hasAnotherCommand(program)) {
+    fixPipe(program, fdRead, fdWrite, fd);
+  } else {
+    dup2(fdRead, fd[PIPE_READ]);
+    dup2(fdWrite, fd[PIPE_WRITE]);
+  }
+  setupStdInAndOut(fd[PIPE_READ], fd[PIPE_WRITE]);
+  runProgram(program);
 }
 
 
@@ -82,15 +100,24 @@ int done = 0;
 
 char *workingDirectory;
 
-int executeShellCommand(const Pgm *program) {
-  if(strcmp("exit",program->pgmlist[0]) == 0) {
+void tryToExecuteExit(const char *command) {
+  if(strcmp("exit",command) == 0) {
     done = 1;
-    return 1;
+    exit(0);
   }
+}
+
+int tryToExecuteChangeDirectory(const Pgm *program) {
   if(strcmp("cd", program->pgmlist[0]) == 0) {
     chdir(program->pgmlist[1]);
     return 1;
   }
+  return 0;
+}
+
+int executeShellCommand(const Pgm *program) {
+  tryToExecuteExit(program->pgmlist[0]);
+  if(tryToExecuteChangeDirectory(program)) return 1;
   return 0;
 }
 
@@ -114,6 +141,8 @@ int main(void)
   while (!done) {
 
     char *line;
+
+    printf("%s@", getlogin());
 
     workingDirectory = getcwd(workingDirectory, 255);
     printf("%s%s%s", KGRN, workingDirectory, KMAG);
@@ -161,7 +190,7 @@ int main(void)
             file_output = fileno(fout);
           }
 
-          runProgram(currentProgram, file_input, file_output); 
+          setupCommandsAndExecute(currentProgram, file_input, file_output); 
 
           if(fin) fclose(fin);
           if(fout) fclose(fout);
