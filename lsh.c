@@ -121,6 +121,8 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
+int waiting = 0;
+
 void printPreInput() {
     printf("%s@", getlogin());
     workingDirectory = getcwd(workingDirectory, 255);
@@ -128,9 +130,11 @@ void printPreInput() {
 }
 
 void signalhandling(int sig) { 
-  char *buf = "\n";  
-  write(STDIN_FILENO, buf, 1);
-  printPreInput();
+  if(!waiting) {
+    char *buf = "\n";  
+    write(STDIN_FILENO, buf, 1);
+    printPreInput();
+  }
 }
 
 /*
@@ -202,7 +206,9 @@ int main(void)
         }
         else {
           if(!cmd.bakground) {
+            waiting = 1;
             waitpid(pid, NULL, 0);
+            waiting = 0;
           }
         }
       }
