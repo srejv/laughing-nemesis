@@ -44,6 +44,8 @@
 #define KCYN  "\x1B[36m"
 #define KWHT  "\x1B[37m"
 
+char *error;
+
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
@@ -69,7 +71,11 @@ void runProgram(Pgm *program, int fdRead, int fdWrite ) {
   }
   dup2(fd[PIPE_READ], STDIN_FILENO);
   dup2(fd[PIPE_WRITE], STDOUT_FILENO);
-  execvp(program->pgmlist[0], program->pgmlist);
+  int result = execvp(program->pgmlist[0], program->pgmlist);
+  if(result < 0) {
+    perror(NULL);
+    exit(-1);
+  }
 }
 
 
@@ -126,27 +132,24 @@ int main(void)
        * and execute it.
        */
       stripwhite(line);
-
-      if(*line) {
+      if(strlen(line) == 0) {
+      }
+      else if(*line) {
         add_history(line);
         /* execute it */
-
         n = parse(line, &cmd);
         //PrintCommand(n, &cmd);
 
-        Pgm *currentProgram = cmd.pgm;
-
-        if(executeShellCommand(currentProgram) > 0) {
-          if(line) {
-            // Must free line because it does this at the end of each iteration
-            free(line);
-          }
+        if(executeShellCommand(cmd.pgm) > 0) {
+          // Must free line because it does this at the end of each iteration
+          free(line);
           continue;
         }
 
         pid_t pid = fork();
 
         if(pid == 0) {
+          Pgm *currentProgram = cmd.pgm;
           int file_input = STDIN_FILENO, file_output = STDOUT_FILENO;
           FILE *fin = NULL, *fout = NULL;
 
