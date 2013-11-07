@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <signal.h>
 #include "parse.h"
 
 #define PIPE_READ 0
@@ -33,6 +34,15 @@
 /*
  * Function declarations
  */
+
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
 
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -80,6 +90,10 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
+void signalhandling(int sig) {
+  // Do... NOTHING!!
+}
+
 /*
  * Name: main
  *
@@ -91,15 +105,16 @@ int main(void)
   Command cmd;
   int n;
   int fd[2];
-  
+  signal(SIGINT, signalhandling);
+
   while (!done) {
 
     char *line;
-    
-    workingDirectory = getcwd(workingDirectory, 255);
-    printf("%s", workingDirectory);
-    line = readline("> ");
 
+    workingDirectory = getcwd(workingDirectory, 255);
+    printf("%s%s%s", KGRN, workingDirectory, KMAG);
+    line = readline("> ");
+    
     if (!line) {
       /* Encountered EOF at top level */
       done = 1;
@@ -117,7 +132,7 @@ int main(void)
         /* execute it */
 
         n = parse(line, &cmd);
-        PrintCommand(n, &cmd);
+        //PrintCommand(n, &cmd);
 
         Pgm *currentProgram = cmd.pgm;
 
