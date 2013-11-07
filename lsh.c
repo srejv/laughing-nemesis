@@ -31,10 +31,6 @@
 #define PIPE_READ 0
 #define PIPE_WRITE 1
 
-/*
- * Function declarations
- */
-
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
@@ -43,6 +39,16 @@
 #define KMAG  "\x1B[35m"
 #define KCYN  "\x1B[36m"
 #define KWHT  "\x1B[37m"
+
+/* When non-zero, this global means the user is done using this program. */
+int done = 0;
+char *workingDirectory;
+int waiting = 0;
+
+/*
+ * Function declarations
+ */
+
 
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -95,10 +101,6 @@ void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite ) {
 }
 
 
-/* When non-zero, this global means the user is done using this program. */
-int done = 0;
-
-char *workingDirectory;
 
 void tryToExecuteExit(const char *command) {
   if(strcmp("exit",command) == 0) {
@@ -121,7 +123,6 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
-int waiting = 0;
 
 void printPreInput() {
     printf("%s@", getlogin());
