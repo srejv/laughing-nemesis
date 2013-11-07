@@ -121,8 +121,16 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
-void signalhandling(int sig) {
-  // Do... NOTHING!!
+void printPreInput() {
+    printf("%s@", getlogin());
+    workingDirectory = getcwd(workingDirectory, 255);
+    printf("%s%s%s> ", KGRN, workingDirectory, KMAG);
+}
+
+void signalhandling(int sig) { 
+  char *buf = "\n";  
+  write(STDIN_FILENO, buf, 1);
+  printPreInput();
 }
 
 /*
@@ -142,11 +150,8 @@ int main(void)
 
     char *line;
 
-    printf("%s@", getlogin());
-
-    workingDirectory = getcwd(workingDirectory, 255);
-    printf("%s%s%s", KGRN, workingDirectory, KMAG);
-    line = readline("> ");
+    printPreInput();
+    line = readline("");
     
     if (!line) {
       /* Encountered EOF at top level */
