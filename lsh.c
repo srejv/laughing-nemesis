@@ -57,14 +57,28 @@ void runProgram(Pgm *program, int fdRead, int fdWrite ) {
     dup2(fdRead, fd[PIPE_READ]);
     dup2(fdWrite, fd[PIPE_WRITE]);
   }
-  printf("NININININ: %d", fd[PIPE_READ]);
   dup2(fd[PIPE_READ], STDIN_FILENO);
   dup2(fd[PIPE_WRITE], STDOUT_FILENO);
   execvp(program->pgmlist[0], program->pgmlist);
 }
 
+
 /* When non-zero, this global means the user is done using this program. */
 int done = 0;
+
+char *workingDirectory;
+
+int executeShellCommand(const Pgm *program) {
+  if(strcmp("exit",program->pgmlist[0]) == 0) {
+    done = 1;
+    return 1;
+  }
+  if(strcmp("cd", program->pgmlist[0]) == 0) {
+    chdir(program->pgmlist[1]);
+    return 1;
+  }
+  return 0;
+}
 
 /*
  * Name: main
@@ -77,10 +91,13 @@ int main(void)
   Command cmd;
   int n;
   int fd[2];
-
+  
   while (!done) {
 
     char *line;
+    
+    workingDirectory = getcwd(workingDirectory, 255);
+    printf("%s", workingDirectory);
     line = readline("> ");
 
     if (!line) {
@@ -95,9 +112,6 @@ int main(void)
        */
       stripwhite(line);
 
-      if(strcmp(line,"exit") == 0) {
-        done = 1;
-      } else
       if(*line) {
         add_history(line);
         /* execute it */
@@ -106,6 +120,14 @@ int main(void)
         PrintCommand(n, &cmd);
 
         Pgm *currentProgram = cmd.pgm;
+
+        if(executeShellCommand(currentProgram) > 0) {
+          if(line) {
+            // Must free line because it does this at the end of each iteration
+            free(line);
+          }
+          continue;
+        }
 
         pid_t pid = fork();
 
