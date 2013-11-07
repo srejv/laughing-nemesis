@@ -48,20 +48,17 @@ void runProgram(Pgm *program, int fdRead, int fdWrite ) {
 
     pid_t pid = fork();
     if(pid == 0) {  
-      // ls
       runProgram(program->next, fdRead, fd[PIPE_WRITE]);
     } else {
-      // wc väntar
       dup2(fdWrite, fd[PIPE_WRITE]);
       waitpid(pid, NULL, 0);
     }
   } else {
-    // ls
     dup2(fdRead, fd[PIPE_READ]);
     dup2(fdWrite, fd[PIPE_WRITE]);
   }
 
-  dup2(fd[PIPE_READ], STDIN_FILENO) ;
+  dup2(fd[PIPE_READ], STDIN_FILENO);
   dup2(fd[PIPE_WRITE], STDOUT_FILENO);
   execvp(program->pgmlist[0], program->pgmlist);
 }
@@ -116,7 +113,7 @@ int main(void)
           int file_input, file_output;
           FILE *fin, *fout;
           if(cmd.rstdin) {
-            fin = freopen(cmd.rstdin, "r", stdin);
+            fin = fopen(cmd.rstdin, "r");
             file_input = fileno(fin);
           } else { 
             dup2(STDIN_FILENO, file_input);
@@ -124,7 +121,7 @@ int main(void)
           printf("File Input: %d, %d\n", file_input, STDIN_FILENO);
 
           if(cmd.rstdout) {
-            fout = freopen(cmd.rstdout, "w", stdout);
+            fout = fopen(cmd.rstdout, "w");
             file_output = fileno(fout);
           }else { 
             dup2(STDOUT_FILENO, file_output);
