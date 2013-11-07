@@ -38,7 +38,7 @@ void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
 void runProgram(Pgm *program, int fdRead, int fdWrite ) {
-  int fd[2] = {0,0};
+  int fd[2] = {fdRead,fdWrite};
   if(program->next) {
     int result = pipe(fd);
     if(result < 0) {
@@ -57,7 +57,7 @@ void runProgram(Pgm *program, int fdRead, int fdWrite ) {
     dup2(fdRead, fd[PIPE_READ]);
     dup2(fdWrite, fd[PIPE_WRITE]);
   }
-
+  printf("NININININ: %d", fd[PIPE_READ]);
   dup2(fd[PIPE_READ], STDIN_FILENO);
   dup2(fd[PIPE_WRITE], STDOUT_FILENO);
   execvp(program->pgmlist[0], program->pgmlist);
@@ -100,7 +100,7 @@ int main(void)
       } else
       if(*line) {
         add_history(line);
-        /* execute it */                
+        /* execute it */
 
         n = parse(line, &cmd);
         PrintCommand(n, &cmd);
@@ -110,23 +110,18 @@ int main(void)
         pid_t pid = fork();
 
         if(pid == 0) {
-          int file_input, file_output;
-          FILE *fin, *fout;
+          int file_input = STDIN_FILENO, file_output = STDOUT_FILENO;
+          FILE *fin = NULL, *fout = NULL;
+
           if(cmd.rstdin) {
             fin = fopen(cmd.rstdin, "r");
             file_input = fileno(fin);
-          } else { 
-            dup2(STDIN_FILENO, file_input);
           }
-          printf("File Input: %d, %d\n", file_input, STDIN_FILENO);
 
           if(cmd.rstdout) {
             fout = fopen(cmd.rstdout, "w");
             file_output = fileno(fout);
-          }else { 
-            dup2(STDOUT_FILENO, file_output);
           }
-          printf("File output: %d, %d\n", file_output, STDOUT_FILENO);
 
           runProgram(currentProgram, file_input, file_output); 
 
