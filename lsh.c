@@ -266,12 +266,10 @@ int main(void)
           continue;
         }
 
-        if(executeShellCommand(cmd.pgm) > 0) {
-          // Must free line because it does this at the end of each iteration
-          free(line);
-          continue;
-        }
-        executeCommand(&cmd);
+        if(executeShellCommand(cmd.pgm) == 0) {
+          // Didn't execute any shell command, execute program
+          executeCommand(&cmd);
+        } 
       }
     }
     
