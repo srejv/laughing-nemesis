@@ -234,6 +234,11 @@ int main(void)
         /* execute it */
         n = parse(line, &cmd);
         //PrintCommand(n, &cmd);
+        if(n < 0) {
+          printf("Parse error\n");
+          free(line);
+          continue;
+        }
 
         if(executeShellCommand(cmd.pgm) > 0) {
           // Must free line because it does this at the end of each iteration
