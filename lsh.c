@@ -48,8 +48,6 @@ int waiting = 0;
 /*
  * Function declarations
  */
-
-
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
@@ -100,8 +98,6 @@ void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite ) {
   runProgram(program);
 }
 
-
-
 void tryToExecuteExit(const char *command) {
   if(strcmp("exit",command) == 0) {
     done = 1;
@@ -117,17 +113,44 @@ int tryToExecuteChangeDirectory(const Pgm *program) {
   return 0;
 }
 
-int executeShellCommand(const Pgm *program) {
-  tryToExecuteExit(program->pgmlist[0]);
-  if(tryToExecuteChangeDirectory(program)) return 1;
+char *argv[50];
+int tryPlz(const Pgm *program) {
+  if(strcmp("plz", program->pgmlist[0]) == 0) {
+    if(program->pgmlist[3] != NULL) {
+      pid_t pid = fork();
+      if(pid ==  0) {
+        printf("Function: %s, Arg: %s\n", program->pgmlist[1], program->pgmlist[3]);
+        argv[0] = program->pgmlist[1];
+        argv[1] = program->pgmlist[3];
+        printf("Function2: %s, Args: %s, %s\n", program->pgmlist[1], program->pgmlist[1], program->pgmlist[3]);
+        int r = execvp(program->pgmlist[1], argv);
+        if (r < 0) {
+          perror(NULL);
+          exit(0);
+        }
+      } else {
+        waitpid(pid, NULL, 0);
+      }
+
+      return 1;
+    } else {
+      return 0;
+    }
+  }
   return 0;
 }
 
+int executeShellCommand(const Pgm *program) {
+  tryToExecuteExit(program->pgmlist[0]);
+  if(tryToExecuteChangeDirectory(program)) return 1;
+  if(tryPlz(program)) return 1;
+  return 0;
+}
 
 void printPreInput() {
-    printf("%s@", getlogin());
-    workingDirectory = getcwd(workingDirectory, 255);
-    printf("%s%s%s> ", KGRN, workingDirectory, KMAG);
+  printf("%s@", getlogin());
+  workingDirectory = getcwd(workingDirectory, 255);
+  printf("%s%s%s> ", KGRN, workingDirectory, KMAG);
 }
 
 void signalhandling(int sig) { 
@@ -135,6 +158,38 @@ void signalhandling(int sig) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
     printPreInput();
+  }
+}
+
+void executeCommand(const Command *cmd) {
+  pid_t pid = fork();
+
+  if(pid == 0) {
+    Pgm *currentProgram = cmd->pgm;
+    int file_input = STDIN_FILENO, file_output = STDOUT_FILENO;
+    FILE *fin = NULL, *fout = NULL;
+
+    if(cmd->rstdin) {
+      fin = fopen(cmd->rstdin, "r");
+      file_input = fileno(fin);
+    }
+
+    if(cmd->rstdout) {
+      fout = fopen(cmd->rstdout, "w");
+      file_output = fileno(fout);
+    }
+
+    setupCommandsAndExecute(currentProgram, file_input, file_output); 
+
+    if(fin) fclose(fin);
+    if(fout) fclose(fout);
+  }
+  else {
+    if(!cmd->bakground) {
+      waiting = 1;
+      waitpid(pid, NULL, 0);
+      waiting = 0;
+    }
   }
 }
 
@@ -148,7 +203,6 @@ int main(void)
 {
   Command cmd;
   int n;
-  int fd[2];
   signal(SIGINT, signalhandling);
 
   while (!done) {
@@ -182,36 +236,7 @@ int main(void)
           free(line);
           continue;
         }
-
-        pid_t pid = fork();
-
-        if(pid == 0) {
-          Pgm *currentProgram = cmd.pgm;
-          int file_input = STDIN_FILENO, file_output = STDOUT_FILENO;
-          FILE *fin = NULL, *fout = NULL;
-
-          if(cmd.rstdin) {
-            fin = fopen(cmd.rstdin, "r");
-            file_input = fileno(fin);
-          }
-
-          if(cmd.rstdout) {
-            fout = fopen(cmd.rstdout, "w");
-            file_output = fileno(fout);
-          }
-
-          setupCommandsAndExecute(currentProgram, file_input, file_output); 
-
-          if(fin) fclose(fin);
-          if(fout) fclose(fout);
-        }
-        else {
-          if(!cmd.bakground) {
-            waiting = 1;
-            waitpid(pid, NULL, 0);
-            waiting = 0;
-          }
-        }
+        executeCommand(&cmd);
       }
     }
     
