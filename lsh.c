@@ -65,6 +65,10 @@ int hasAnotherCommand(const Pgm *program) {
   return program->next != NULL;
 }
 
+
+/**  setupStdinAndOut redirects stdin to read and stdout to write.
+*    Read and write are file descriptors.
+*/
 void setupStdInAndOut(int read, int write) {
   dup2(read, STDIN_FILENO);
   dup2(write, STDOUT_FILENO);
@@ -147,17 +151,17 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
-void printPreInput() {
+void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
   workingDirectory = getcwd(workingDirectory, 255);
-  printf("%s%s%s> ", KGRN, workingDirectory, KMAG);
+  printf("%s%s%s%s", KGRN, workingDirectory, KMAG, prompt);
 }
 
 void signalhandling(int sig) { 
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    printPreInput();
+    printPreInput("> ");
   }
 }
 
@@ -209,8 +213,8 @@ int main(void)
 
     char *line;
 
-    printPreInput();
-    line = readline("");
+    printPreInput("");
+    line = readline("> ");
     
     if (!line) {
       /* Encountered EOF at top level */
