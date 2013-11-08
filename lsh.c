@@ -151,6 +151,24 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
+char *createPreInput(const char *prompt) {
+  char *login = getlogin();
+  int llogin = strlen(login);
+  char loginat[llogin+2];
+  memcpy(loginat, login, sizeof(char) * llogin);
+  loginat[llogin] = '@';
+  loginat[llogin+1] = '\0';
+  workingDirectory = getcwd(workingDirectory, 255);
+  int lwd = strlen(workingDirectory);
+  int lprompt = strlen(prompt);
+  char *preInput = malloc( sizeof(char) * (1 + llogin + 1 + lwd + 1 + lprompt + 1));
+  preInput[0] = KGRN;
+  preInput[1] = '\0';
+  strcat(preInput, loginat);
+  strcat(preInput, workingDirectory);
+  strcat(preInput, prompt);
+}
+
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
   workingDirectory = getcwd(workingDirectory, 255);
@@ -161,7 +179,10 @@ void signalhandling(int sig) {
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    printPreInput("> ");
+    char *prompt = createPreInput("> ");
+    printf("%s", prompt);
+    free (prompt);
+//    printPreInput("> ");
   }
 }
 
@@ -213,8 +234,9 @@ int main(void)
 
     char *line;
 
-    printPreInput("");
-    line = readline("> ");
+//    printPreInput("");
+    char *prompt = createPreInput("> ");
+    line = readline(prompt);
     
     if (!line) {
       /* Encountered EOF at top level */
@@ -237,6 +259,7 @@ int main(void)
         if(n < 0) {
           printf("Parse error\n");
           free(line);
+          free(prompt);
           continue;
         }
 
@@ -251,6 +274,7 @@ int main(void)
     
     if(line) {
       free(line);
+      free(prompt);
     }
   }
   return 0;
