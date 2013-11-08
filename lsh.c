@@ -161,11 +161,14 @@ char *createPreInput(const char *prompt) {
   workingDirectory = getcwd(workingDirectory, 255);
   int lwd = strlen(workingDirectory);
   int lprompt = strlen(prompt);
-  char *preInput = malloc( sizeof(char) * (1 + llogin + 1 + lwd + 1 + lprompt + 1));
-  preInput[0] = KGRN;
-  preInput[1] = '\0';
+  int preInputLength = sizeof(loginat) - sizeof(char)
+     + sizeof(char) * (lwd + lprompt + strlen(KGRN) + strlen(KMAG) + 1);
+  char *preInput = malloc( preInputLength);
+  preInput[0] = '\0';
+  strcat(preInput, KGRN);
   strcat(preInput, loginat);
   strcat(preInput, workingDirectory);
+  strcat(preInput, KMAG);
   strcat(preInput, prompt);
 }
 
