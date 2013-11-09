@@ -151,26 +151,38 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
-char *createPreInput(const char *prompt) {
-  char *login = getlogin();
-  int llogin = strlen(login);
-  char loginat[llogin+2];
-  memcpy(loginat, login, sizeof(char) * llogin);
-  loginat[llogin] = '@';
-  loginat[llogin+1] = '\0';
+char *createPrompt(const char *promptEnd, int addIgnoreChars) {
+  const int nrOfParts = (addIgnoreChars ? 10 : 6);
+  int p = 0; //current preinput part
+  const char *parts[nrOfParts];
+  if(addIgnoreChars)
+    parts[p++] = "\001";
+  parts[p++] = KGRN;
+  if(addIgnoreChars)
+    parts[p++] = "\002";
+  parts[p++] = getlogin();
+  parts[p++] = "@";
   workingDirectory = getcwd(workingDirectory, 255);
-  int lwd = strlen(workingDirectory);
-  int lprompt = strlen(prompt);
-  int preInputLength = sizeof(loginat) - sizeof(char)
-     + sizeof(char) * (lwd + lprompt + strlen(KGRN) + strlen(KMAG) + 1);
-  char *preInput = malloc( preInputLength);
-  preInput[0] = '\0';
-  strcat(preInput, KGRN);
-  strcat(preInput, loginat);
-  strcat(preInput, workingDirectory);
-  strcat(preInput, KMAG);
-  strcat(preInput, prompt);
+  parts[p++] = workingDirectory;
+  if(addIgnoreChars)
+    parts[p++] = "\001";
+  parts[p++] = KMAG;
+  if(addIgnoreChars)
+    parts[p++] = "\002";
+  parts[p++] = promptEnd;
+  int i = 0;
+  int length = 1; // Start at 1 for null-termination
+  for(i = 0; i < nrOfParts; i++)
+    length+= strlen(parts[i]);
+  char *prompt = malloc( length * sizeof(char));
+  prompt[0] = '\0';
+  for(i = 0; i < nrOfParts; i++)
+    strcat(prompt, parts[i]);
+  return prompt;
 }
+
+
+
 
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
@@ -182,7 +194,7 @@ void signalhandling(int sig) {
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    char *prompt = createPreInput("> ");
+    char *prompt = createPrompt("> ", 0);
     printf("%s", prompt);
     free (prompt);
 //    printPreInput("> ");
@@ -238,7 +250,7 @@ int main(void)
     char *line;
 
 //    printPreInput("");
-    char *prompt = createPreInput("> ");
+    char *prompt = createPrompt("> ", 1);
     line = readline(prompt);
     
     if (!line) {
