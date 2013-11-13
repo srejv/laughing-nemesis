@@ -165,11 +165,22 @@ void signalhandling(int sig) {
   }
 }
 
+void handleZombies(int sig) {
+  if(sig == SIGCHLD) {
+    waitpid(-1, NULL, WNOHANG);
+  }
+}
+
 void executeCommand(const Command *cmd) {
   pid_t pid = fork();
 
   if(pid == 0) {
     Pgm *currentProgram = cmd->pgm;
+    
+    if(cmd->bakground) {
+      signal(SIGINT, SIG_IGN);
+    }
+
     int file_input = STDIN_FILENO, file_output = STDOUT_FILENO;
     FILE *fin = NULL, *fout = NULL;
 
@@ -208,7 +219,7 @@ int main(void)
   Command cmd;
   int n;
   signal(SIGINT, signalhandling);
-
+  signal(SIGCHLD, handleZombies);
   while (!done) {
 
     char *line;
