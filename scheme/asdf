@@ -1,0 +1,10 @@
+(load "stdlib.scm")
+
+(define listOfTen (map number->string (range 0 10)))
+(define (addTwo str1 str2) (add-str str1 str2))
+(define (addEcho str) 
+	(if (string? str)
+		(add-str "echo " str)
+		""))
+(define listOfEchos (map addEcho listOfTen))
+(for-each lsh listOfEchos)
