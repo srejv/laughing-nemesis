@@ -151,6 +151,10 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
+/** createPrompt - allocates a string user@dir, caller is responsible for deallocation
+*  param promptEnd is the last part of the prompt e.g. '>' or '#'
+*  param addIgnoreChars adds readline
+*/
 char *createPrompt(const char *promptEnd, int addIgnoreChars) {
   const int nrOfParts = (addIgnoreChars ? 10 : 6);
   int p = 0; //current preinput part
@@ -260,7 +264,6 @@ int main(void)
 
     char *line;
 
-//    printPreInput("");
     char *prompt = createPrompt("> ", 1);
     line = readline(prompt);
     
@@ -285,7 +288,9 @@ int main(void)
         if(n < 0) {
           printf("Parse error\n");
           free(line);
+          line = NULL;
           free(prompt);
+          prompt = NULL;
           continue;
         }
 
@@ -298,8 +303,12 @@ int main(void)
     
     if(line) {
       free(line);
-      free(prompt);
+      line = NULL;
     }
+    if(prompt) {
+      free(prompt);
+      prompt = NULL;
+    }  
   }
   return 0;
 }
