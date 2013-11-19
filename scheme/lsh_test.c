@@ -19,7 +19,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -27,10 +26,8 @@
 #include <readline/history.h>
 #include <signal.h>
 #include "parse.h"
-
 #include "lsh_shell.h"
-
-
+#include "scheme.h"
 
 
 /*
@@ -45,6 +42,11 @@ int main(void)
   int n;
   signal(SIGINT, signalhandling);
   signal(SIGCHLD, handleZombies);
+  FILE *f;
+  object *exp;
+
+  init_scm();
+
   while (1) {
 
     char *line;
@@ -57,7 +59,7 @@ int main(void)
       if(line) {
         free(line);
       }
-      break;;
+      break;
     }
     else {
       /*
@@ -67,12 +69,32 @@ int main(void)
        */
       stripwhite(line);
       if(strlen(line) == 0) {
+
       }
       else if(*line) {
         add_history(line);
+
+        if(line[0] == '!') {
+          // LISP :D let's do this!
+          while(1) {
+            printf("> ");
+            exp = read_scm(stdin);
+            if (exp == NULL) {
+              break;
+            }
+            write_scm(stdout, eval_scm(exp, get_the_global_env()));
+            printf("\n");
+            if(get_scheme_error() < 0) {
+              break; 
+            }
+          }
+          reset_scheme_error();
+          free(line);
+          continue;
+        }
+
         /* execute it */
         n = parse(line, &cmd);
-        //PrintCommand(n, &cmd);
         if(n < 0) {
           printf("Parse error\n");
           free(line);

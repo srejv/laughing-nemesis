@@ -74,38 +74,16 @@ void tryToExecuteExit(const char *command) {
 
 int tryToExecuteChangeDirectory(const Pgm *program) {
   if(strcmp("cd", program->pgmlist[0]) == 0) {
-    chdir(program->pgmlist[1]);
+    int res = chdir(program->pgmlist[1]);
+    if (res < 0) {
+      perror(NULL);
+    }
     return 1;
   }
   return 0;
 }
 
 char *argv[50];
-int tryPlz(const Pgm *program) {
-  if(strcmp("plz", program->pgmlist[0]) == 0) {
-    if(program->pgmlist[3] != NULL) {
-      pid_t pid = fork();
-      if(pid ==  0) {
-        printf("Function: %s, Arg: %s\n", program->pgmlist[1], program->pgmlist[3]);
-        argv[0] = program->pgmlist[1];
-        argv[1] = program->pgmlist[3];
-        printf("Function2: %s, Args: %s, %s\n", program->pgmlist[1], program->pgmlist[1], program->pgmlist[3]);
-        int r = execvp(program->pgmlist[1], argv);
-        if (r < 0) {
-          perror(NULL);
-          exit(0);
-        }
-      } else {
-        waitpid(pid, NULL, 0);
-      }
-
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-  return 0;
-}
 
 int trySetEnv(const Pgm *program) {
   return 0;
@@ -118,7 +96,6 @@ int tryUnsetEnv(const Pgm *program) {
 int executeShellCommand(const Pgm *program) {
   tryToExecuteExit(program->pgmlist[0]);
   if(tryToExecuteChangeDirectory(program)) return 1;
-  if(tryPlz(program)) return 1;
   if(trySetEnv(program)) return 1;
   if(tryUnsetEnv(program)) return 1;
   return 0;
