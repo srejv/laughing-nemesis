@@ -1,57 +1,21 @@
-/* 
- * Main source code file for lsh shell program
- *
- * You are free to add functions to this file.
- * If you want to add functions in a separate file 
- * you will need to modify Makefile to compile
- * your additional functions.
- *
- * Add appropriate comments in your code to make it
- * easier for us while grading your assignment.
- *
- * Submit the entire lab1 folder as a tar archive (.tgz).
- * Command to create submission archive: 
-      $> tar cvf lab1.tgz lab1/
- *
- * All the best 
- */
 
-
+#include "lsh_shell.h"
+#include "parse.h"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <signal.h>
-#include "parse.h"
-
-#define PIPE_READ 0
-#define PIPE_WRITE 1
-
-#define KNRM  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
-#define KBLU  "\x1B[34m"
-#define KMAG  "\x1B[35m"
-#define KCYN  "\x1B[36m"
-#define KWHT  "\x1B[37m"
 
 /* When non-zero, this global means the user is done using this program. */
-int done = 0;
 char *workingDirectory;
 int waiting = 0;
-
-/*
- * Function declarations
- */
-void PrintCommand(int, Command *);
-void PrintPgm(Pgm *);
-void stripwhite(char *);
-void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite);
 
 void runProgram(const Pgm *program) {
   int result = execvp(program->pgmlist[0], program->pgmlist);
@@ -104,7 +68,6 @@ void setupCommandsAndExecute(Pgm *program, int fdRead, int fdWrite ) {
 
 void tryToExecuteExit(const char *command) {
   if(strcmp("exit",command) == 0) {
-    done = 1;
     exit(0);
   }
 }
@@ -144,60 +107,34 @@ int tryPlz(const Pgm *program) {
   return 0;
 }
 
+int trySetEnv(const Pgm *program) {
+  return 0;
+}
+
+int tryUnsetEnv(const Pgm *program) {
+  return 0;
+}
+
 int executeShellCommand(const Pgm *program) {
   tryToExecuteExit(program->pgmlist[0]);
   if(tryToExecuteChangeDirectory(program)) return 1;
   if(tryPlz(program)) return 1;
+  if(trySetEnv(program)) return 1;
+  if(tryUnsetEnv(program)) return 1;
   return 0;
 }
-
-char *createPrompt(const char *promptEnd, int addIgnoreChars) {
-  const int nrOfParts = (addIgnoreChars ? 10 : 6);
-  int p = 0; //current preinput part
-  const char *parts[nrOfParts];
-  if(addIgnoreChars)
-    parts[p++] = "\001";
-  parts[p++] = KGRN;
-  if(addIgnoreChars)
-    parts[p++] = "\002";
-  parts[p++] = getlogin();
-  parts[p++] = "@";
-  workingDirectory = getcwd(workingDirectory, 255);
-  parts[p++] = workingDirectory;
-  if(addIgnoreChars)
-    parts[p++] = "\001";
-  parts[p++] = KMAG;
-  if(addIgnoreChars)
-    parts[p++] = "\002";
-  parts[p++] = promptEnd;
-  int i = 0;
-  int length = 1; // Start at 1 for null-termination
-  for(i = 0; i < nrOfParts; i++)
-    length+= strlen(parts[i]);
-  char *prompt = malloc( length * sizeof(char));
-  prompt[0] = '\0';
-  for(i = 0; i < nrOfParts; i++)
-    strcat(prompt, parts[i]);
-  return prompt;
-}
-
-
-
 
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
   workingDirectory = getcwd(workingDirectory, 255);
-  printf("%s%s%s%s", KGRN, workingDirectory, KMAG, prompt);
+  printf("%s%s%s%s", KCYN, workingDirectory, KYEL, prompt);
 }
 
 void signalhandling(int sig) { 
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    char *prompt = createPrompt("> ", 0);
-    printf("%s", prompt);
-    free (prompt);
-//    printPreInput("> ");
+    printPreInput("> ");
   }
 }
 
@@ -241,109 +178,6 @@ void executeCommand(const Command *cmd) {
       waitpid(pid, NULL, 0);
       waiting = 0;
     }
-  }
-}
-
-/*
- * Name: main
- *
- * Description: Gets the ball rolling...
- *
- */
-int main(void)
-{
-  Command cmd;
-  int n;
-  signal(SIGINT, signalhandling);
-  signal(SIGCHLD, handleZombies);
-  while (!done) {
-
-    char *line;
-
-//    printPreInput("");
-    char *prompt = createPrompt("> ", 1);
-    line = readline(prompt);
-    
-    if (!line) {
-      /* Encountered EOF at top level */
-      done = 1;
-    }
-    else {
-      /*
-       * Remove leading and trailing whitespace from the line
-       * Then, if there is anything left, add it to the history list
-       * and execute it.
-       */
-      stripwhite(line);
-      if(strlen(line) == 0) {
-      }
-      else if(*line) {
-        add_history(line);
-        /* execute it */
-        n = parse(line, &cmd);
-        //PrintCommand(n, &cmd);
-        if(n < 0) {
-          printf("Parse error\n");
-          free(line);
-          free(prompt);
-          continue;
-        }
-
-        if(executeShellCommand(cmd.pgm) == 0) {
-          // Didn't execute any shell command, execute program
-          executeCommand(&cmd);
-        } 
-      }
-    }
-    
-    if(line) {
-      free(line);
-      free(prompt);
-    }
-  }
-  return 0;
-}
-
-/*
- * Name: PrintCommand
- *
- * Description: Prints a Command structure as returned by parse on stdout.
- *
- */
-void
-PrintCommand (int n, Command *cmd)
-{
-  printf("Parse returned %d:\n", n);
-  printf("   stdin : %s\n", cmd->rstdin  ? cmd->rstdin  : "<none>" );
-  printf("   stdout: %s\n", cmd->rstdout ? cmd->rstdout : "<none>" );
-  printf("   bg    : %s\n", cmd->bakground ? "yes" : "no");
-  PrintPgm(cmd->pgm);
-}
-
-/*
- * Name: PrintPgm
- *
- * Description: Prints a list of Pgm:s
- *
- */
-void
-PrintPgm (Pgm *p)
-{
-  if (p == NULL) {
-    return;
-  }
-  else {
-    char **pl = p->pgmlist;
-
-    /* The list is in reversed order so print
-     * it reversed to get right
-     */
-    PrintPgm(p->next);
-    printf("    [");
-    while (*pl) {
-      printf("%s ", *pl++);
-    }
-    printf("]\n");
   }
 }
 
