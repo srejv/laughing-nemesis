@@ -198,10 +198,11 @@ void signalhandling(int sig) {
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    char *prompt = createPrompt("> ", 0);
-    printf("%s", prompt);
-    free (prompt);
-//    printPreInput("> ");
+    rl_reset_line_state();
+    rl_point = 0;
+    rl_end = 0;
+    rl_line_buffer[0] = '\0';
+    rl_redisplay();
   }
 }
 
