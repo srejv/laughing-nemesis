@@ -1,4 +1,6 @@
 
+#include "scheme.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,50 +8,6 @@
 #include "lsh_shell.h"
 
 /**************************** MODEL ******************************/
-
-typedef enum {THE_EMPTY_LIST = 0, BOOLEAN, SYMBOL, FIXNUM,
-              CHARACTER, STRING, PAIR, PRIMITIVE_PROC,
-              COMPOUND_PROC, INPUT_PORT, OUTPUT_PORT,
-              EOF_OBJECT} object_type;
-
-typedef struct object {
-    object_type type;
-    union {
-        struct {
-            char value;
-        } boolean;
-        struct {
-            char *value;
-        } symbol;
-        struct {
-            long value;
-        } fixnum;
-        struct {
-            char value;
-        } character;
-        struct {
-            char *value;
-        } string;
-        struct {
-            struct object *car;
-            struct object *cdr;
-        } pair;
-        struct {
-            struct object *(*fn)(struct object *arguments);
-        } primitive_proc;
-        struct {
-            struct object *parameters;
-            struct object *body;
-            struct object *env;
-        } compound_proc;
-        struct {
-            FILE *stream;
-        } input_port;
-        struct {
-            FILE *stream;
-        } output_port;
-    } data;
-} object;
 
 /* no GC so truely "unlimited extent" */
 object *alloc_object(void) {
@@ -62,6 +20,8 @@ object *alloc_object(void) {
     }
     return obj;
 }
+
+int scheme_error;
 
 object *the_empty_list;
 object *false;
@@ -80,6 +40,7 @@ object *let_symbol;
 object *and_symbol;
 object *or_symbol;
 object *eof_object;
+object *error_symbol;
 object *the_empty_environment;
 object *the_global_environment;
 
@@ -281,7 +242,6 @@ object *is_pair_proc(object *arguments) {
     return is_pair(car(arguments)) ? true : false;
 }
 
-char is_compound_proc(object *obj);
 
 object *is_procedure_proc(object *arguments) {
     object *obj;
@@ -475,13 +435,11 @@ object *interaction_environment_proc(object *arguments) {
     return the_global_environment;
 }
 
-object *setup_environment(void);
 
 object *null_environment_proc(object *arguments) {
     return setup_environment();
 }
 
-object *make_environment(void);
 
 object *environment_proc(object *arguments) {
     return make_environment();
@@ -493,9 +451,6 @@ object *eval_proc(object *arguments) {
     exit(1);
 }
 
-object *read(FILE *in);
-object *eval(object *exp, object *env);
-
 object *load_proc(object *arguments) {
     char *filename;
     FILE *in;
@@ -506,16 +461,17 @@ object *load_proc(object *arguments) {
     in = fopen(filename, "r");
     if (in == NULL) {
         fprintf(stderr, "could not load file \"%s\"", filename);
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
-    while ((exp = read(in)) != NULL) {
-        result = eval(exp, the_global_environment);
+    while ((exp = read_scm(in)) != NULL) {
+        result = eval_scm(exp, the_global_environment);
     }
     fclose(in);
     return result;
 }
 
-object *make_input_port(FILE *in);
 
 object *open_input_port_proc(object *arguments) {
     char *filename;
@@ -525,7 +481,9 @@ object *open_input_port_proc(object *arguments) {
     in = fopen(filename, "r");
     if (in == NULL) {
         fprintf(stderr, "could not open file \"%s\"\n", filename);
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     return make_input_port(in);
 }
@@ -536,12 +494,12 @@ object *close_input_port_proc(object *arguments) {
     result = fclose(car(arguments)->data.input_port.stream);
     if (result == EOF) {
         fprintf(stderr, "could not close input port\n");
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     return ok_symbol;
 }
-
-char is_input_port(object *obj);
 
 object *is_input_port_proc(object *arguments) {
     return is_input_port(car(arguments)) ? true : false;
@@ -554,7 +512,7 @@ object *read_proc(object *arguments) {
     in = is_the_empty_list(arguments) ?
              stdin :
              car(arguments)->data.input_port.stream;
-    result = read(in);
+    result = read_scm(in);
     return (result == NULL) ? eof_object : result;
 }
 
@@ -569,8 +527,6 @@ object *read_char_proc(object *arguments) {
     return (result == EOF) ? eof_object : make_character(result);
 }
 
-int peek(FILE *in);
-
 object *peek_char_proc(object *arguments) {
     FILE *in;
     int result;
@@ -582,13 +538,11 @@ object *peek_char_proc(object *arguments) {
     return (result == EOF) ? eof_object : make_character(result);
 }
 
-char is_eof_object(object *obj);
 
 object *is_eof_object_proc(object *arguments) {
     return is_eof_object(car(arguments)) ? true : false;
 }
 
-object *make_output_port(FILE *in);
 
 object *open_output_port_proc(object *arguments) {
     char *filename;
@@ -598,7 +552,9 @@ object *open_output_port_proc(object *arguments) {
     out = fopen(filename, "w");
     if (out == NULL) {
         fprintf(stderr, "could not open file \"%s\"\n", filename);
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     return make_output_port(out);
 }
@@ -609,12 +565,13 @@ object *close_output_port_proc(object *arguments) {
     result = fclose(car(arguments)->data.output_port.stream);
     if (result == EOF) {
         fprintf(stderr, "could not close output port\n");
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     return ok_symbol;
 }
 
-char is_output_port(object *obj);
 
 object *is_output_port_proc(object *arguments) {
     return is_output_port(car(arguments)) ? true : false;
@@ -634,8 +591,6 @@ object *write_char_proc(object *arguments) {
     return ok_symbol;
 }
 
-void write(FILE *out, object *obj);
-
 object *write_proc(object *arguments) {
     object *exp;
     FILE *out;
@@ -645,14 +600,14 @@ object *write_proc(object *arguments) {
     out = is_the_empty_list(arguments) ?
              stdout :
              car(arguments)->data.output_port.stream;
-    write(out, exp);
+    write_scm(out, exp);
     fflush(out);
     return ok_symbol;
 }
 
 object *error_proc(object *arguments) {
     while (!is_the_empty_list(arguments)) {
-        write(stderr, car(arguments));
+        write_scm(stderr, car(arguments));
         fprintf(stderr, " ");
         arguments = cdr(arguments);
     };
@@ -662,27 +617,33 @@ object *error_proc(object *arguments) {
 
 object *lsh_proc(object *arguments) {
     Command cmd;
-    object *exp;
     char *str;
     int n;
 
-    str = car(arguments)->data.string.value;
-    stripwhite(str);
-    n = parse(str, &cmd);
-    if(n < 0) {
-        fprintf(stderr, "lsh: Parse error\n");
-        exit(1);
+    if(is_pair(car(arguments)) && is_the_empty_list(cdr(arguments))) {
+        arguments = car(arguments);
     }
 
-    if(executeShellCommand(cmd.pgm) == 0) {
-        executeCommand(&cmd);
-    }
+    do {
+        str = car(arguments)->data.string.value;
+        stripwhite(str);
+        n = parse(str, &cmd);
+        if(n < 0) {
+            fprintf(stderr, "lsh: Parse error\n");
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
+        }
+
+        if(executeShellCommand(cmd.pgm) == 0) {
+            executeCommand(&cmd);
+        }
+    } while (!is_the_empty_list(arguments = cdr(arguments)));
     return ok_symbol;
 }
 
 // (add-str "hello " "world")
-object *add_str_proc(object *arguments) {
-    object *exp;
+object *add_str_proc(object *arguments) {    
     char *prev, *next, *res;
     
     prev = (car(arguments))->data.string.value;
@@ -790,7 +751,9 @@ object *lookup_variable_value(object *var, object *env) {
         env = enclosing_environment(env);
     }
     fprintf(stderr, "unbound variable, %s\n", var->data.symbol.value);
-    exit(1);
+    scheme_error = -1;
+    return error_symbol;
+    //exit(1);
 }
 
 void set_variable_value(object *var, object *val, object *env) {
@@ -813,7 +776,9 @@ void set_variable_value(object *var, object *val, object *env) {
         env = enclosing_environment(env);
     }
     fprintf(stderr, "unbound variable, %s\n", var->data.symbol.value);
-    exit(1);
+    scheme_error = -1;
+    return;
+    //exit(1);
 }
 
 void define_variable(object *var, object *val, object *env) {
@@ -922,7 +887,9 @@ object *make_environment(void) {
     return env;
 }
 
-void init(void) {
+void init_scm(void) {
+    scheme_error = 0;
+
     the_empty_list = alloc_object();
     the_empty_list->type = THE_EMPTY_LIST;
 
@@ -951,6 +918,9 @@ void init(void) {
     eof_object = alloc_object();
     eof_object->type = EOF_OBJECT;
     
+    error_symbol = alloc_object();
+    error_symbol->type = EOF_OBJECT;
+
     the_empty_environment = the_empty_list;
 
     the_global_environment = make_environment();
@@ -1000,7 +970,9 @@ void eat_expected_string(FILE *in, char *str) {
         c = getc(in);
         if (c != *str) {
             fprintf(stderr, "unexpected character '%c'\n", c);
-            exit(1);
+            //exit(1);
+            scheme_error = -1;
+            return;
         }
         str++;
     }
@@ -1009,7 +981,8 @@ void eat_expected_string(FILE *in, char *str) {
 void peek_expected_delimiter(FILE *in) {
     if (!is_delimiter(peek(in))) {
         fprintf(stderr, "character not followed by delimiter\n");
-        exit(1);
+        scheme_error = -1;
+        //exit(1);
     }
 }
 
@@ -1020,7 +993,9 @@ object *read_character(FILE *in) {
     switch (c) {
         case EOF:
             fprintf(stderr, "incomplete character literal\n");
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         case 's':
             if (peek(in) == 'p') {
                 eat_expected_string(in, "pace");
@@ -1033,6 +1008,13 @@ object *read_character(FILE *in) {
                 eat_expected_string(in, "ewline");
                 peek_expected_delimiter(in);
                 return make_character('\n');
+            }
+            break;
+        case 't':
+            if (peek(in) == 'a') {
+                eat_expected_string(in, "ab");
+                peek_expected_delimiter(in);
+                return make_character('\t');
             }
             break;
     }
@@ -1053,7 +1035,7 @@ object *read_pair(FILE *in) {
     }
     ungetc(c, in);
 
-    car_obj = read(in);
+    car_obj = read_scm(in);
 
     eat_whitespace(in);
     
@@ -1062,15 +1044,19 @@ object *read_pair(FILE *in) {
         c = peek(in);
         if (!is_delimiter(c)) {
             fprintf(stderr, "dot not followed by delimiter\n");
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         }
-        cdr_obj = read(in);
+        cdr_obj = read_scm(in);
         eat_whitespace(in);
         c = getc(in);
         if (c != ')') {
             fprintf(stderr,
                     "where was the trailing right paren?\n");
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         }
         return cons(car_obj, cdr_obj);
     }
@@ -1081,7 +1067,7 @@ object *read_pair(FILE *in) {
     }
 }
 
-object *read(FILE *in) {
+object *read_scm(FILE *in) {
     int c;
     short sign = 1;
     int i;
@@ -1105,7 +1091,9 @@ object *read(FILE *in) {
             default:
                 fprintf(stderr,
                         "unknown boolean or character literal\n");
-                exit(1);
+                scheme_error = -1;
+                return error_symbol;
+                //exit(1);
         }
     }
     else if (isdigit(c) || (c == '-' && (isdigit(peek(in))))) {
@@ -1126,7 +1114,9 @@ object *read(FILE *in) {
         }
         else {
             fprintf(stderr, "number not followed by delimiter\n");
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         }
     }
     else if (is_initial(c) ||
@@ -1142,7 +1132,9 @@ object *read(FILE *in) {
             else {
                 fprintf(stderr, "symbol too long. "
                         "Maximum length is %d\n", BUFFER_MAX);
-                exit(1);
+                scheme_error = -1;
+                return error_symbol;
+                //exit(1);
             }
             c = getc(in);
         }
@@ -1154,7 +1146,9 @@ object *read(FILE *in) {
         else {
             fprintf(stderr, "symbol not followed by delimiter. "
                             "Found '%c'\n", c);
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         }
     }
     else if (c == '"') { /* read a string */
@@ -1168,7 +1162,9 @@ object *read(FILE *in) {
             }
             if (c == EOF) {
                 fprintf(stderr, "non-terminated string literal\n");
-                exit(1);
+                scheme_error = -1;
+                return error_symbol;
+                //exit(1);
             }
             /* subtract 1 to save space for '\0' terminator */
             if (i < BUFFER_MAX - 1) {
@@ -1178,7 +1174,9 @@ object *read(FILE *in) {
                 fprintf(stderr,
                         "string too long. Maximum length is %d\n",
                         BUFFER_MAX);
-                exit(1);
+                scheme_error = -1;
+                return error_symbol;
+                //exit(1);
             }
         }
         buffer[i] = '\0';
@@ -1188,17 +1186,21 @@ object *read(FILE *in) {
         return read_pair(in);
     }
     else if (c == '\'') { /* read quoted expression */
-        return cons(quote_symbol, cons(read(in), the_empty_list));
+        return cons(quote_symbol, cons(read_scm(in), the_empty_list));
     }
     else if (c == EOF) {
         return NULL;
     }
     else {
         fprintf(stderr, "bad input. Unexpected '%c'\n", c);
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     fprintf(stderr, "read illegal state\n");
-    exit(1);
+    scheme_error = -1;
+    return error_symbol;
+    //exit(1);
 }
 
 /*****  EVALUATE *********/
@@ -1385,7 +1387,9 @@ object *expand_clauses(object *clauses) {
             }
             else {
                 fprintf(stderr, "else clause isn't last cond->if");
-                exit(1);
+                scheme_error = -1;
+                return error_symbol;
+                //exit(1);
             }
         }
         else {
@@ -1524,26 +1528,26 @@ object *list_of_values(object *exps, object *env) {
         return the_empty_list;
     }
     else {
-        return cons(eval(first_operand(exps), env),
+        return cons(eval_scm(first_operand(exps), env),
                     list_of_values(rest_operands(exps), env));
     }
 }
 
 object *eval_assignment(object *exp, object *env) {
     set_variable_value(assignment_variable(exp),
-                       eval(assignment_value(exp), env),
+                       eval_scm(assignment_value(exp), env),
                        env);
     return ok_symbol;
 }
 
 object *eval_definition(object *exp, object *env) {
     define_variable(definition_variable(exp),
-                    eval(definition_value(exp), env),
+                    eval_scm(definition_value(exp), env),
                     env);
     return ok_symbol;
 }
 
-object *eval(object *exp, object *env) {
+object *eval_scm(object *exp, object *env) {
     object *procedure;
     object *arguments;
     object *result;
@@ -1565,7 +1569,7 @@ tailcall:
         return eval_definition(exp, env);
     }
     else if (is_if(exp)) {
-        exp = is_true(eval(if_predicate(exp), env)) ?
+        exp = is_true(eval_scm(if_predicate(exp), env)) ?
                   if_consequent(exp) :
                   if_alternative(exp);
         goto tailcall;
@@ -1578,7 +1582,7 @@ tailcall:
     else if (is_begin(exp)) {
         exp = begin_actions(exp);
         while (!is_last_exp(exp)) {
-            eval(first_exp(exp), env);
+            eval_scm(first_exp(exp), env);
             exp = rest_exps(exp);
         }
         exp = first_exp(exp);
@@ -1598,7 +1602,7 @@ tailcall:
             return true;
         }
         while (!is_last_exp(exp)) {
-            result = eval(first_exp(exp), env);
+            result = eval_scm(first_exp(exp), env);
             if (is_false(result)) {
                 return result;
             }
@@ -1613,7 +1617,7 @@ tailcall:
             return false;
         }
         while (!is_last_exp(exp)) {
-            result = eval(first_exp(exp), env);
+            result = eval_scm(first_exp(exp), env);
             if (is_true(result)) {
                 return result;
             }
@@ -1623,7 +1627,7 @@ tailcall:
         goto tailcall;
     }
     else if (is_application(exp)) {
-        procedure = eval(operator(exp), env);
+        procedure = eval_scm(operator(exp), env);
         arguments = list_of_values(operands(exp), env);
 
         /* handle eval specially for tail call requirement */
@@ -1654,15 +1658,21 @@ tailcall:
         }
         else {
             fprintf(stderr, "unknown procedure type\n");
-            exit(1);
+            scheme_error = -1;
+            return error_symbol;
+            //exit(1);
         }
     }
     else {
         fprintf(stderr, "cannot eval unknown expression type\n");
-        exit(1);
+        scheme_error = -1;
+        return error_symbol;
+        //exit(1);
     }
     fprintf(stderr, "eval illegal state\n");
-    exit(1);
+    scheme_error = -1;
+    return error_symbol;
+    //exit(1);
 }
 
 /******* PRINT ********/
@@ -1673,7 +1683,7 @@ void write_pair(FILE *out, object *pair) {
     
     car_obj = car(pair);
     cdr_obj = cdr(pair);
-    write(out, car_obj);
+    write_scm(out, car_obj);
     if (cdr_obj->type == PAIR) {
         fprintf(out, " ");
         write_pair(out, cdr_obj);
@@ -1683,11 +1693,11 @@ void write_pair(FILE *out, object *pair) {
     }
     else {
         fprintf(out, " . ");
-        write(out, cdr_obj);
+        write_scm(out, cdr_obj);
     }
 }
 
-void write(FILE *out, object *obj) {
+void write_scm(FILE *out, object *obj) {
     char c;
     char *str;
     
@@ -1714,6 +1724,9 @@ void write(FILE *out, object *obj) {
                 case ' ':
                     fprintf(out, "space");
                     break;
+                case '\t':
+                    fprintf(out, "tab");
+                    break;
                 default:
                     putc(c, out);
             }
@@ -1725,6 +1738,9 @@ void write(FILE *out, object *obj) {
                 switch (*str) {
                     case '\n':
                         fprintf(out, "\\n");
+                        break;
+                    case '\t':
+                        fprintf(out, "\\t");
                         break;
                     case '\\':
                         fprintf(out, "\\\\");
@@ -1761,31 +1777,40 @@ void write(FILE *out, object *obj) {
             break;
         default:
             fprintf(stderr, "cannot write unknown type\n");
-            exit(1);
+            scheme_error = -1;
+            return;
+            //exit(1);
     }
 }
 
-/* REPL */
+object *get_the_global_env(void) {
+    return the_global_environment;
+}
 
+int get_scheme_error() {
+    return scheme_error;
+}
+
+void reset_scheme_error() {
+    scheme_error = 0;
+}
+/* REPL */
+/*
 int
 main(void) {
 	object *exp;
-	object *evald;
-	printf("Welcome to Bootrap Scheme. "
+	printf("Welcome to Nemesis Scheme. "
 			"Use ctrl-c to exit.\n");
 	
-	init();
+	init_scm();
 		
 	while(1) {
 		printf("> ");
-		exp = read(stdin);
+		exp = read_scm(stdin);
 		if (exp == NULL) {
 			break;
 		}
-		fprintf(stderr, "Evaluating...\n");
-		evald = eval(exp, the_global_environment);
-		fprintf(stderr, "Printing...\n");
-		write(stdout, evald);
+		write_scm(stdout, eval_scm(exp, the_global_environment));
 		printf("\n");
 	}
 
@@ -1793,3 +1818,4 @@ main(void) {
 
 	return 0;
 }
+*/
