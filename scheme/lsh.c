@@ -42,7 +42,7 @@ int main(void)
   int n;
   signal(SIGINT, signalhandling);
   signal(SIGCHLD, handleZombies);
-  FILE *f;
+  
   object *exp;
 
   init_scm();
@@ -51,8 +51,8 @@ int main(void)
 
     char *line;
 
-    printPreInput("");
-    line = readline("> ");
+    char *prompt = createPrompt("> ", 1);
+    line = readline(prompt);
     
     if (!line) {
       /* Encountered EOF at top level */
@@ -95,7 +95,7 @@ int main(void)
 
         /* execute it */
         n = parse(line, &cmd);
-        if(n < 0) {
+        if(n < 0) { 
           printf("Parse error\n");
           free(line);
           continue;

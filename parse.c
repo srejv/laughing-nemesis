@@ -35,7 +35,7 @@ parse (char *buf, Command *c)
   char *t = buf;
   char *tok;
 
-  init();
+  initp();
   c->rstdin    = NULL;
   c->rstdout   = NULL;
   c->rstderr   = NULL;
@@ -110,7 +110,7 @@ newtoken:
   goto newcmd;
 }
 
-void init( void )
+void initp( void )
 {
   int i;
   for (i=0;i<19;i++) {

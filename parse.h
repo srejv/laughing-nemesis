@@ -15,7 +15,7 @@ typedef struct node {
   int bakground;
 } Command;
 
-extern void init( void );
+extern void initp( void );
 extern int parse ( char *, Command *);
 extern int nexttoken( char *, char **);
 extern int acmd( char *, Pgm **);
