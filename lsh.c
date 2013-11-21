@@ -74,6 +74,9 @@ void setupStdInAndOut(int read, int write) {
   dup2(write, STDOUT_FILENO);
 }
 
+/** 
+  Sets up a pipe for the command.
+*/
 void fixPipe(const Pgm *program, int fdRead, int fdWrite, int fd[2]) {
   int result = pipe(fd);
   if(result < 0) {
@@ -111,53 +114,18 @@ void tryToExecuteExit(const char *command) {
 
 int tryToExecuteChangeDirectory(const Pgm *program) {
   if(strcmp("cd", program->pgmlist[0]) == 0) {
-    chdir(program->pgmlist[1]);
+    int res = chdir(program->pgmlist[1]);
+    if(res < 0) {
+      perror(NULL);
+    }
     return 1;
   }
   return 0;
 }
 
-char *argv[50];
-int tryPlz(const Pgm *program) {
-  if(strcmp("plz", program->pgmlist[0]) == 0) {
-    if(program->pgmlist[3] != NULL) {
-      pid_t pid = fork();
-      if(pid ==  0) {
-        printf("Function: %s, Arg: %s\n", program->pgmlist[1], program->pgmlist[3]);
-        argv[0] = program->pgmlist[1];
-        argv[1] = program->pgmlist[3];
-        printf("Function2: %s, Args: %s, %s\n", program->pgmlist[1], program->pgmlist[1], program->pgmlist[3]);
-        int r = execvp(program->pgmlist[1], argv);
-        if (r < 0) {
-          perror(NULL);
-          exit(0);
-        }
-      } else {
-        waitpid(pid, NULL, 0);
-      }
-
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-  return 0;
-}
-
-int trySetEnv(const Pgm *program) {
-
-}
-
-int tryUnsetEnv(const Pgm *program) {
-  
-}
-
 int executeShellCommand(const Pgm *program) {
   tryToExecuteExit(program->pgmlist[0]);
   if(tryToExecuteChangeDirectory(program)) return 1;
-  if(tryPlz(program)) return 1;
-  if(trySetEnv(program)) return 1;
-  if(tryUnsetEnv(program)) return 1;
   return 0;
 }
 
@@ -167,36 +135,48 @@ int executeShellCommand(const Pgm *program) {
 */
 char *createPrompt(const char *promptEnd, int addIgnoreChars) {
   const int nrOfParts = (addIgnoreChars ? 10 : 6);
-  int p = 0; //current preinput part
+  int p = 0, i = 0; //current preinput part
   const char *parts[nrOfParts];
+  
   if(addIgnoreChars)
     parts[p++] = "\001";
+  
   parts[p++] = KGRN;
+  
   if(addIgnoreChars)
     parts[p++] = "\002";
+  
   parts[p++] = getlogin();
+  
   parts[p++] = "@";
+  
   workingDirectory = getcwd(workingDirectory, 255);
   parts[p++] = workingDirectory;
+  
   if(addIgnoreChars)
     parts[p++] = "\001";
+  
   parts[p++] = KMAG;
+
   if(addIgnoreChars)
     parts[p++] = "\002";
+
   parts[p++] = promptEnd;
-  int i = 0;
   int length = 1; // Start at 1 for null-termination
-  for(i = 0; i < nrOfParts; i++)
-    length+= strlen(parts[i]);
+  for(i = 0; i < nrOfParts; i++) {
+    if (parts[i]) {
+      length += strlen(parts[i]);
+    }
+  }
   char *prompt = malloc( length * sizeof(char));
   prompt[0] = '\0';
-  for(i = 0; i < nrOfParts; i++)
-    strcat(prompt, parts[i]);
+  for(i = 0; i < nrOfParts; i++)  {
+    if(parts[i]) {
+      strcat(prompt, parts[i]);
+    }
+  }
   return prompt;
 }
-
-
-
 
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
@@ -271,6 +251,7 @@ int main(void)
   int n;
   signal(SIGINT, signalhandling);
   signal(SIGCHLD, handleZombies);
+
   while (!done) {
 
     char *line;
