@@ -2,10 +2,10 @@
 # Sample Makefile for lsh
 # lab1 in Operating System course
 #
-BIN=	lsh
+BIN=	lsh_test
 
-SRCS=	parse.c lsh.c
-OBJS=	parse.o lsh.o
+SRCS=	parse.c lsh_test.c lsh_shell.c
+OBJS=	parse.o lsh_test.o lsh_shell.o
 
 CC=	gcc
 CFLAGS= -g 

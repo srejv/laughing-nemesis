@@ -144,17 +144,27 @@ int tryPlz(const Pgm *program) {
   return 0;
 }
 
+int trySetEnv(const Pgm *program) {
+
+}
+
+int tryUnsetEnv(const Pgm *program) {
+  
+}
+
 int executeShellCommand(const Pgm *program) {
   tryToExecuteExit(program->pgmlist[0]);
   if(tryToExecuteChangeDirectory(program)) return 1;
   if(tryPlz(program)) return 1;
+  if(trySetEnv(program)) return 1;
+  if(tryUnsetEnv(program)) return 1;
   return 0;
 }
 
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
   workingDirectory = getcwd(workingDirectory, 255);
-  printf("%s%s%s%s", KGRN, workingDirectory, KMAG, prompt);
+  printf("%s%s%s%s", KCYN, workingDirectory, KYEL, prompt);
 }
 
 void signalhandling(int sig) { 
