@@ -161,6 +161,43 @@ int executeShellCommand(const Pgm *program) {
   return 0;
 }
 
+/** createPrompt - allocates a string user@dir, caller is responsible for deallocation
+*  param promptEnd is the last part of the prompt e.g. '>' or '#'
+*  param addIgnoreChars adds readline
+*/
+char *createPrompt(const char *promptEnd, int addIgnoreChars) {
+  const int nrOfParts = (addIgnoreChars ? 10 : 6);
+  int p = 0; //current preinput part
+  const char *parts[nrOfParts];
+  if(addIgnoreChars)
+    parts[p++] = "\001";
+  parts[p++] = KGRN;
+  if(addIgnoreChars)
+    parts[p++] = "\002";
+  parts[p++] = getlogin();
+  parts[p++] = "@";
+  workingDirectory = getcwd(workingDirectory, 255);
+  parts[p++] = workingDirectory;
+  if(addIgnoreChars)
+    parts[p++] = "\001";
+  parts[p++] = KMAG;
+  if(addIgnoreChars)
+    parts[p++] = "\002";
+  parts[p++] = promptEnd;
+  int i = 0;
+  int length = 1; // Start at 1 for null-termination
+  for(i = 0; i < nrOfParts; i++)
+    length+= strlen(parts[i]);
+  char *prompt = malloc( length * sizeof(char));
+  prompt[0] = '\0';
+  for(i = 0; i < nrOfParts; i++)
+    strcat(prompt, parts[i]);
+  return prompt;
+}
+
+
+
+
 void printPreInput(const char *prompt) {
   printf("%s@", getlogin());
   workingDirectory = getcwd(workingDirectory, 255);
@@ -171,7 +208,11 @@ void signalhandling(int sig) {
   if(!waiting) {
     char *buf = "\n";  
     write(STDIN_FILENO, buf, 1);
-    printPreInput("> ");
+    rl_reset_line_state();
+    rl_point = 0;
+    rl_end = 0;
+    rl_line_buffer[0] = '\0';
+    rl_redisplay();
   }
 }
 
@@ -234,8 +275,8 @@ int main(void)
 
     char *line;
 
-    printPreInput("");
-    line = readline("> ");
+    char *prompt = createPrompt("> ", 1);
+    line = readline(prompt);
     
     if (!line) {
       /* Encountered EOF at top level */
@@ -258,6 +299,9 @@ int main(void)
         if(n < 0) {
           printf("Parse error\n");
           free(line);
+          line = NULL;
+          free(prompt);
+          prompt = NULL;
           continue;
         }
 
@@ -270,7 +314,12 @@ int main(void)
     
     if(line) {
       free(line);
+      line = NULL;
     }
+    if(prompt) {
+      free(prompt);
+      prompt = NULL;
+    }  
   }
   return 0;
 }
